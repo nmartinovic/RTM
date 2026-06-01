@@ -1,10 +1,11 @@
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Response, status
+from fastapi import Depends, FastAPI, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from app.auth import AuthenticatedUser, create_session_token, get_current_user, verify_credentials
+from app.rtm import RtmStatus, build_rtm_auth_url, load_rtm_status, redeem_rtm_frob, save_rtm_token
 from app.settings import Settings, get_settings
 
 
@@ -27,6 +28,10 @@ class SessionResponse(BaseModel):
 
 class LogoutResponse(BaseModel):
     authenticated: bool
+
+
+class RtmConnectResponse(BaseModel):
+    authorization_url: str
 
 
 app = FastAPI(title="RTM Task Organizer API", version="0.1.0")
@@ -86,3 +91,30 @@ def logout(
 @app.get("/api/session", response_model=SessionResponse)
 def session(user: Annotated[AuthenticatedUser, Depends(get_current_user)]) -> SessionResponse:
     return SessionResponse(authenticated=True, user=user)
+
+
+@app.get("/api/rtm/status", response_model=RtmStatus)
+def rtm_status(
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> RtmStatus:
+    return load_rtm_status(settings)
+
+
+@app.post("/api/rtm/connect", response_model=RtmConnectResponse)
+def rtm_connect(
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> RtmConnectResponse:
+    return RtmConnectResponse(authorization_url=build_rtm_auth_url(settings))
+
+
+@app.get("/api/rtm/callback", response_model=RtmStatus)
+def rtm_callback(
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    settings: Annotated[Settings, Depends(get_settings)],
+    frob: Annotated[str, Query(min_length=1)],
+) -> RtmStatus:
+    token = redeem_rtm_frob(frob, settings)
+    save_rtm_token(token, settings)
+    return RtmStatus(connected=True, user=token.user, perms=token.perms)
