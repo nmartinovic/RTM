@@ -24,7 +24,7 @@ The product follows the architecture in [`PRD.md`](PRD.md): a static GitHub Page
 
 ## Local setup
 
-This repository currently contains the baseline monorepo skeleton. Each workspace has its own README with the expected setup path and will gain concrete commands as the app shell is implemented.
+This repository contains the baseline monorepo skeleton plus the initial static dashboard shell. Each workspace has its own README with setup details.
 
 ### Frontend workspace
 
@@ -32,12 +32,13 @@ This repository currently contains the baseline monorepo skeleton. Each workspac
 cd frontend
 ```
 
-Planned local development flow:
+Local development flow:
 
 1. Install Node.js LTS.
-2. Install dependencies once a `package.json` exists.
-3. Run the Vite development server.
+2. Install frontend dependencies with `npm install`.
+3. Run `npm run dev` for the dashboard shell.
 4. Configure the dashboard with the backend API base URL through a non-secret environment variable such as `VITE_API_BASE_URL`.
+5. Build static assets with `npm run build`.
 
 See [`frontend/README.md`](frontend/README.md) for workspace details.
 
