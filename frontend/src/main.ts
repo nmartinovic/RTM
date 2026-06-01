@@ -63,12 +63,16 @@ type RtmSyncResponse = {
   list_count: number;
   active_task_count: number;
 };
+type ApiErrorResponse = {
+  detail?: string;
+};
 let rtmStatus: RtmConnectionStatus = 'checking';
 let rtmUserLabel = '';
 let rtmStatusMessage = 'Checking RTM connection.';
 let rtmListCount = '—';
 let rtmTaskCount = '—';
-let rtmSyncMessage = 'No RTM sync has run yet.';
+let rtmSyncStatus: 'idle' | 'syncing' | 'synced' | 'blocked' | 'error' = 'idle';
+let rtmSyncMessage = 'Connect RTM, then run a read-only sync.';
 
 function getCurrentRoute() {
   const route = window.location.hash.replace(/^#/, '') || '/dashboard';
@@ -142,15 +146,17 @@ function renderRoute(route: string, navItem: NavItem) {
             <span class="status-pill ${rtmStatus}" aria-live="polite">${rtmStatusLabel()}</span>
             <span>${escapeHtml(rtmStatusMessage)}</span>
             ${rtmUserLabel ? `<code>${escapeHtml(rtmUserLabel)}</code>` : ''}
-            <button class="primary-button" type="button" data-action="connect-rtm">Connect RTM</button>
-            <button class="secondary-button" type="button" data-action="sync-rtm">Sync read-only</button>
+            <div class="button-row">
+              <button class="primary-button" type="button" data-action="connect-rtm"${rtmStatus === 'auth-required' ? ' disabled' : ''}>Connect RTM</button>
+              <button class="secondary-button" type="button" data-action="sync-rtm"${rtmStatus !== 'connected' || rtmSyncStatus === 'syncing' ? ' disabled' : ''}>Sync read-only</button>
+            </div>
           </div>
         </div>
         <div class="metric-grid" aria-label="Queue summaries">
           ${[
-            ['RTM lists', rtmListCount, rtmSyncMessage],
+            ['RTM lists', rtmListCount, rtmListHelper()],
             ['Active tasks', rtmTaskCount, 'Incomplete RTM tasks returned by read-only sync'],
-            ['Recent uploads', '—', 'No upload API data loaded yet'],
+            ['Sync status', rtmSyncStatusLabel(), rtmSyncMessage],
           ]
             .map(
               ([label, value, helper]) => `
@@ -231,10 +237,18 @@ async function checkRtmStatus() {
     const status = (await response.json()) as RtmStatusResponse;
     rtmStatus = status.connected ? 'connected' : 'disconnected';
     rtmUserLabel = status.user?.fullname || status.user?.username || '';
-    rtmStatusMessage = status.connected ? 'RTM token is stored on the backend.' : 'RTM is not connected yet.';
+    rtmStatusMessage = status.connected
+      ? 'RTM is connected. Run a read-only sync to refresh counts.'
+      : 'RTM is not connected. Use Connect RTM to authorize this backend.';
+    if (status.connected) {
+      await syncRtmReadOnly({ silent: true });
+      return;
+    }
   } catch {
     rtmStatus = 'error';
     rtmStatusMessage = 'Unable to load RTM connection status.';
+    rtmSyncStatus = 'error';
+    rtmSyncMessage = 'Check that the backend is reachable and session cookies are allowed.';
   }
 
   render();
@@ -259,21 +273,25 @@ async function connectRtm() {
     }
 
     if (!response.ok) {
-      throw new Error('RTM authorization URL failed');
+      const errorMessage = await readApiError(response, 'Unable to start RTM authorization.');
+      throw new Error(errorMessage);
     }
 
     const payload = (await response.json()) as { authorization_url: string };
     window.location.href = payload.authorization_url;
-  } catch {
+  } catch (error) {
     rtmStatus = 'error';
-    rtmStatusMessage = 'Unable to start RTM authorization.';
+    rtmStatusMessage = error instanceof Error ? error.message : 'Unable to start RTM authorization.';
     render();
   }
 }
 
-async function syncRtmReadOnly() {
+async function syncRtmReadOnly(options: { silent?: boolean } = {}) {
+  rtmSyncStatus = 'syncing';
   rtmSyncMessage = 'Syncing RTM lists and incomplete tasks.';
-  render();
+  if (!options.silent) {
+    render();
+  }
 
   try {
     const response = await fetch(`${apiBaseUrl}/api/rtm/sync`, {
@@ -283,30 +301,44 @@ async function syncRtmReadOnly() {
     });
 
     if (response.status === 401) {
+      rtmSyncStatus = 'blocked';
       rtmSyncMessage = 'Sign in to the backend before syncing RTM.';
       render();
       return;
     }
 
     if (response.status === 409) {
+      rtmSyncStatus = 'blocked';
       rtmSyncMessage = 'Connect RTM before running read-only sync.';
       render();
       return;
     }
 
     if (!response.ok) {
-      throw new Error('RTM sync failed');
+      const errorMessage = await readApiError(response, 'Unable to sync RTM data.');
+      throw new Error(errorMessage);
     }
 
     const payload = (await response.json()) as RtmSyncResponse;
     rtmListCount = String(payload.list_count);
     rtmTaskCount = String(payload.active_task_count);
+    rtmSyncStatus = 'synced';
     rtmSyncMessage = 'Read-only sync completed.';
-  } catch {
-    rtmSyncMessage = 'Unable to sync RTM data.';
+  } catch (error) {
+    rtmSyncStatus = 'error';
+    rtmSyncMessage = error instanceof Error ? error.message : 'Unable to sync RTM data.';
   }
 
   render();
+}
+
+async function readApiError(response: Response, fallback: string) {
+  try {
+    const payload = (await response.json()) as ApiErrorResponse;
+    return payload.detail || fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 function rtmStatusLabel() {
@@ -323,6 +355,29 @@ function rtmStatusLabel() {
     return 'Disconnected';
   }
   return 'Checking';
+}
+
+function rtmSyncStatusLabel() {
+  if (rtmSyncStatus === 'syncing') {
+    return 'Syncing';
+  }
+  if (rtmSyncStatus === 'synced') {
+    return 'Current';
+  }
+  if (rtmSyncStatus === 'blocked') {
+    return 'Blocked';
+  }
+  if (rtmSyncStatus === 'error') {
+    return 'Error';
+  }
+  return 'Not run';
+}
+
+function rtmListHelper() {
+  if (rtmStatus === 'connected' && rtmSyncStatus === 'idle') {
+    return 'Run read-only sync to load RTM lists.';
+  }
+  return rtmSyncMessage;
 }
 
 function escapeHtml(value: string) {

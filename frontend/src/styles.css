@@ -27,6 +27,11 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
 code {
   display: inline-flex;
   width: fit-content;
@@ -196,6 +201,13 @@ code {
 .status-pill.error {
   background: #fee2e2;
   color: #991b1b;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
 }
 
 .primary-button,
