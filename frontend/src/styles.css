@@ -23,6 +23,10 @@ a {
   font: inherit;
 }
 
+button {
+  cursor: pointer;
+}
+
 code {
   display: inline-flex;
   width: fit-content;
@@ -176,6 +180,35 @@ code {
 .status-pill.offline {
   background: #fee2e2;
   color: #991b1b;
+}
+
+.status-pill.connected {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-pill.disconnected,
+.status-pill.auth-required {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-pill.error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.primary-button {
+  border: 0;
+  border-radius: 0.55rem;
+  background: #2563eb;
+  color: #ffffff;
+  padding: 0.55rem 0.85rem;
+  font-weight: 800;
+}
+
+.primary-button:hover {
+  background: #1d4ed8;
 }
 
 .metric-grid {

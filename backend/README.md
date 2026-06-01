@@ -38,8 +38,12 @@ The API will be available at `http://127.0.0.1:8000`. Keep local configuration i
 - `FRONTEND_ORIGIN`: exact GitHub Pages origin allowed by CORS, for example `https://nmartinovic.github.io`.
 - `SESSION_SECRET_KEY`: secret used to sign session tokens. Set this to a long random value outside local development.
 - `SESSION_COOKIE_SECURE`: set to `true` for HTTPS deployments.
+- `RTM_API_KEY`: Remember The Milk API key.
+- `RTM_SHARED_SECRET`: Remember The Milk shared secret used for API signatures.
+- `RTM_PERMS`: requested RTM auth permissions. Use `read` for the read-only integration milestone.
+- `RTM_TOKEN_STORE_PATH`: backend-only file path for MVP RTM token storage. Defaults to ignored `local-data/rtm-token.json`.
 
-Future RTM, Gemma, database, and storage credentials also belong in backend-only environment variables or the hosting provider's secret manager. Do not put those values in GitHub Pages variables.
+Future Gemma, database, and storage credentials also belong in backend-only environment variables or the hosting provider's secret manager. Do not put those values in GitHub Pages variables.
 
 ## CORS
 
@@ -59,3 +63,6 @@ Use managed Postgres for durable production storage when persistence is added. U
 - `POST /api/login`: accepts `{"username": "...", "password": "..."}` and returns a bearer token while also setting an HTTP-only session cookie.
 - `POST /api/logout`: clears the session cookie. Requires authentication.
 - `GET /api/session`: returns the current authenticated user. Requires authentication.
+- `GET /api/rtm/status`: returns the server-side RTM connection state. Requires authentication.
+- `POST /api/rtm/connect`: returns a signed RTM authorization URL. Requires authentication.
+- `GET /api/rtm/callback`: exchanges RTM's `frob` for an auth token and stores it on the backend. Requires authentication.

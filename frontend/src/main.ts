@@ -50,6 +50,18 @@ if (!rootElement) {
 
 const root = rootElement;
 let backendStatus: 'checking' | 'online' | 'offline' = 'checking';
+type RtmConnectionStatus = 'checking' | 'connected' | 'disconnected' | 'auth-required' | 'error';
+type RtmStatusResponse = {
+  connected: boolean;
+  user: {
+    username: string;
+    fullname: string;
+  } | null;
+  perms: string | null;
+};
+let rtmStatus: RtmConnectionStatus = 'checking';
+let rtmUserLabel = '';
+let rtmStatusMessage = 'Checking RTM connection.';
 
 function getCurrentRoute() {
   const route = window.location.hash.replace(/^#/, '') || '/dashboard';
@@ -114,6 +126,18 @@ function renderRoute(route: string, navItem: NavItem) {
             <code>${apiBaseUrl}</code>
           </div>
         </div>
+        <div class="status-card">
+          <div>
+            <p class="eyebrow">Remember The Milk</p>
+            <h2>Account connection</h2>
+          </div>
+          <div class="status-stack">
+            <span class="status-pill ${rtmStatus}" aria-live="polite">${rtmStatusLabel()}</span>
+            <span>${escapeHtml(rtmStatusMessage)}</span>
+            ${rtmUserLabel ? `<code>${escapeHtml(rtmUserLabel)}</code>` : ''}
+            <button class="primary-button" type="button" data-action="connect-rtm">Connect RTM</button>
+          </div>
+        </div>
         <div class="metric-grid" aria-label="Queue summaries">
           ${[
             ['Needs approval', '—', 'Pending backend integration'],
@@ -172,6 +196,102 @@ async function checkBackendHealth() {
   render();
 }
 
+async function checkRtmStatus() {
+  rtmStatus = 'checking';
+  rtmStatusMessage = 'Checking RTM connection.';
+  rtmUserLabel = '';
+  render();
+
+  try {
+    const response = await fetch(`${apiBaseUrl}/api/rtm/status`, {
+      cache: 'no-store',
+      credentials: 'include',
+      mode: 'cors',
+    });
+
+    if (response.status === 401) {
+      rtmStatus = 'auth-required';
+      rtmStatusMessage = 'Sign in to the backend before connecting RTM.';
+      render();
+      return;
+    }
+
+    if (!response.ok) {
+      throw new Error('RTM status check failed');
+    }
+
+    const status = (await response.json()) as RtmStatusResponse;
+    rtmStatus = status.connected ? 'connected' : 'disconnected';
+    rtmUserLabel = status.user?.fullname || status.user?.username || '';
+    rtmStatusMessage = status.connected ? 'RTM token is stored on the backend.' : 'RTM is not connected yet.';
+  } catch {
+    rtmStatus = 'error';
+    rtmStatusMessage = 'Unable to load RTM connection status.';
+  }
+
+  render();
+}
+
+async function connectRtm() {
+  rtmStatusMessage = 'Opening RTM authorization.';
+  render();
+
+  try {
+    const response = await fetch(`${apiBaseUrl}/api/rtm/connect`, {
+      method: 'POST',
+      credentials: 'include',
+      mode: 'cors',
+    });
+
+    if (response.status === 401) {
+      rtmStatus = 'auth-required';
+      rtmStatusMessage = 'Sign in to the backend before connecting RTM.';
+      render();
+      return;
+    }
+
+    if (!response.ok) {
+      throw new Error('RTM authorization URL failed');
+    }
+
+    const payload = (await response.json()) as { authorization_url: string };
+    window.location.href = payload.authorization_url;
+  } catch {
+    rtmStatus = 'error';
+    rtmStatusMessage = 'Unable to start RTM authorization.';
+    render();
+  }
+}
+
+function rtmStatusLabel() {
+  if (rtmStatus === 'connected') {
+    return 'Connected';
+  }
+  if (rtmStatus === 'auth-required') {
+    return 'Sign in';
+  }
+  if (rtmStatus === 'error') {
+    return 'Error';
+  }
+  if (rtmStatus === 'disconnected') {
+    return 'Disconnected';
+  }
+  return 'Checking';
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    };
+    return entities[character];
+  });
+}
+
 function pageHeader(eyebrow: string, title: string, description: string) {
   return `
     <header class="page-header">
@@ -182,6 +302,12 @@ function pageHeader(eyebrow: string, title: string, description: string) {
 }
 
 window.addEventListener('hashchange', render);
+root.addEventListener('click', (event) => {
+  const target = event.target;
+  if (target instanceof HTMLElement && target.dataset.action === 'connect-rtm') {
+    void connectRtm();
+  }
+});
 
 if (!window.location.hash) {
   window.location.hash = '#/dashboard';
@@ -190,3 +316,4 @@ if (!window.location.hash) {
 }
 
 void checkBackendHealth();
+void checkRtmStatus();
