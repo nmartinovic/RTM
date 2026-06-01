@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rtm-task-organizer"
+version = "0.1.0"
+description = "AI task organizer backend for Remember The Milk"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.111,<1",
+    "pydantic-settings>=2.2,<3",
+    "uvicorn[standard]>=0.29,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "httpx>=0.27,<1",
+    "pytest>=8,<9",
+]
+
+[tool.setuptools.packages.find]
+where = ["backend"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["backend"]

@@ -49,6 +49,7 @@ if (!rootElement) {
 }
 
 const root = rootElement;
+let backendStatus: 'checking' | 'online' | 'offline' = 'checking';
 
 function getCurrentRoute() {
   const route = window.location.hash.replace(/^#/, '') || '/dashboard';
@@ -87,6 +88,14 @@ function render() {
 
 function renderRoute(route: string, navItem: NavItem) {
   if (route === '/dashboard') {
+    const statusLabel = backendStatus === 'online' ? 'Online' : backendStatus === 'offline' ? 'Offline' : 'Checking';
+    const statusText =
+      backendStatus === 'online'
+        ? 'Backend health check passed.'
+        : backendStatus === 'offline'
+          ? 'Backend health check failed.'
+          : 'Checking backend health.';
+
     return `
       <section class="page-stack" aria-labelledby="dashboard-title">
         ${pageHeader(
@@ -99,7 +108,11 @@ function renderRoute(route: string, navItem: NavItem) {
             <p class="eyebrow">Backend API</p>
             <h2 id="dashboard-title">Configured endpoint</h2>
           </div>
-          <code>${apiBaseUrl}</code>
+          <div class="status-stack">
+            <span class="status-pill ${backendStatus}" aria-live="polite">${statusLabel}</span>
+            <span>${statusText}</span>
+            <code>${apiBaseUrl}</code>
+          </div>
         </div>
         <div class="metric-grid" aria-label="Queue summaries">
           ${[
@@ -142,6 +155,23 @@ function renderRoute(route: string, navItem: NavItem) {
     </section>`;
 }
 
+async function checkBackendHealth() {
+  backendStatus = 'checking';
+  render();
+
+  try {
+    const response = await fetch(`${apiBaseUrl}/health`, {
+      cache: 'no-store',
+      mode: 'cors',
+    });
+    backendStatus = response.ok ? 'online' : 'offline';
+  } catch {
+    backendStatus = 'offline';
+  }
+
+  render();
+}
+
 function pageHeader(eyebrow: string, title: string, description: string) {
   return `
     <header class="page-header">
@@ -158,3 +188,5 @@ if (!window.location.hash) {
 } else {
   render();
 }
+
+void checkBackendHealth();
