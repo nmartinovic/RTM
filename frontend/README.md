@@ -34,6 +34,12 @@ npm run build
 
 The build emits deployable static files to `dist/`.
 
+## GitHub Pages deployment
+
+The repository includes a GitHub Actions workflow at `.github/workflows/deploy-pages.yml` that builds this workspace and publishes `dist/` to GitHub Pages whenever changes are pushed to `main`. The workflow can also be started manually from the Actions tab.
+
+For the deployed dashboard, configure the backend API origin with a repository variable named `VITE_API_BASE_URL`. Use a public HTTPS origin only; do not store RTM shared secrets, Gemma keys, long-lived RTM tokens, database URLs, or session-signing secrets in GitHub Pages variables because frontend variables are embedded in static browser assets.
+
 ## Configuration
 
 Set the browser-safe backend API origin with a Vite-style environment variable:
