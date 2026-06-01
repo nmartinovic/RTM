@@ -198,17 +198,31 @@ code {
   color: #991b1b;
 }
 
-.primary-button {
+.primary-button,
+.secondary-button {
   border: 0;
   border-radius: 0.55rem;
-  background: #2563eb;
-  color: #ffffff;
   padding: 0.55rem 0.85rem;
   font-weight: 800;
 }
 
+.primary-button {
+  background: #2563eb;
+  color: #ffffff;
+}
+
 .primary-button:hover {
   background: #1d4ed8;
+}
+
+.secondary-button {
+  border: 1px solid #94a3b8;
+  background: #ffffff;
+  color: #172033;
+}
+
+.secondary-button:hover {
+  background: #f8fafc;
 }
 
 .metric-grid {

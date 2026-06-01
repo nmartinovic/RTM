@@ -59,9 +59,16 @@ type RtmStatusResponse = {
   } | null;
   perms: string | null;
 };
+type RtmSyncResponse = {
+  list_count: number;
+  active_task_count: number;
+};
 let rtmStatus: RtmConnectionStatus = 'checking';
 let rtmUserLabel = '';
 let rtmStatusMessage = 'Checking RTM connection.';
+let rtmListCount = '—';
+let rtmTaskCount = '—';
+let rtmSyncMessage = 'No RTM sync has run yet.';
 
 function getCurrentRoute() {
   const route = window.location.hash.replace(/^#/, '') || '/dashboard';
@@ -136,13 +143,14 @@ function renderRoute(route: string, navItem: NavItem) {
             <span>${escapeHtml(rtmStatusMessage)}</span>
             ${rtmUserLabel ? `<code>${escapeHtml(rtmUserLabel)}</code>` : ''}
             <button class="primary-button" type="button" data-action="connect-rtm">Connect RTM</button>
+            <button class="secondary-button" type="button" data-action="sync-rtm">Sync read-only</button>
           </div>
         </div>
         <div class="metric-grid" aria-label="Queue summaries">
           ${[
-            ['Needs approval', '—', 'Pending backend integration'],
-            ['Low-risk candidates', '—', 'Awaiting validation rules'],
-            ['Recent uploads', '—', 'No API data loaded yet'],
+            ['RTM lists', rtmListCount, rtmSyncMessage],
+            ['Active tasks', rtmTaskCount, 'Incomplete RTM tasks returned by read-only sync'],
+            ['Recent uploads', '—', 'No upload API data loaded yet'],
           ]
             .map(
               ([label, value, helper]) => `
@@ -263,6 +271,44 @@ async function connectRtm() {
   }
 }
 
+async function syncRtmReadOnly() {
+  rtmSyncMessage = 'Syncing RTM lists and incomplete tasks.';
+  render();
+
+  try {
+    const response = await fetch(`${apiBaseUrl}/api/rtm/sync`, {
+      cache: 'no-store',
+      credentials: 'include',
+      mode: 'cors',
+    });
+
+    if (response.status === 401) {
+      rtmSyncMessage = 'Sign in to the backend before syncing RTM.';
+      render();
+      return;
+    }
+
+    if (response.status === 409) {
+      rtmSyncMessage = 'Connect RTM before running read-only sync.';
+      render();
+      return;
+    }
+
+    if (!response.ok) {
+      throw new Error('RTM sync failed');
+    }
+
+    const payload = (await response.json()) as RtmSyncResponse;
+    rtmListCount = String(payload.list_count);
+    rtmTaskCount = String(payload.active_task_count);
+    rtmSyncMessage = 'Read-only sync completed.';
+  } catch {
+    rtmSyncMessage = 'Unable to sync RTM data.';
+  }
+
+  render();
+}
+
 function rtmStatusLabel() {
   if (rtmStatus === 'connected') {
     return 'Connected';
@@ -306,6 +352,9 @@ root.addEventListener('click', (event) => {
   const target = event.target;
   if (target instanceof HTMLElement && target.dataset.action === 'connect-rtm') {
     void connectRtm();
+  }
+  if (target instanceof HTMLElement && target.dataset.action === 'sync-rtm') {
+    void syncRtmReadOnly();
   }
 });
 

@@ -29,6 +29,46 @@ class RtmStatus(BaseModel):
     perms: str | None = None
 
 
+class RtmList(BaseModel):
+    id: str
+    name: str
+    deleted: bool
+    locked: bool
+    archived: bool
+    position: int | None = None
+    smart: bool
+    filter: str | None = None
+
+
+class RtmTask(BaseModel):
+    list_id: str
+    taskseries_id: str
+    task_id: str
+    name: str
+    created: str
+    modified: str
+    source: str
+    url: str
+    location_id: str
+    tags: list[str]
+    notes: list[str]
+    due: str
+    has_due_time: bool
+    added: str
+    completed: str
+    deleted: str
+    priority: str
+    postponed: int
+    estimate: str
+
+
+class RtmReadResponse(BaseModel):
+    lists: list[RtmList]
+    tasks: list[RtmTask]
+    list_count: int
+    active_task_count: int
+
+
 def build_rtm_auth_url(settings: Settings) -> str:
     _require_rtm_credentials(settings)
     params = {
@@ -72,6 +112,39 @@ def redeem_rtm_frob(frob: str, settings: Settings) -> RtmToken:
     return parse_rtm_token_response(payload)
 
 
+def fetch_rtm_read_data(settings: Settings) -> RtmReadResponse:
+    token = require_rtm_token(settings)
+    lists_payload = call_rtm_method("rtm.lists.getList", settings, token)
+    tasks_payload = call_rtm_method("rtm.tasks.getList", settings, token, {"filter": "status:incomplete"})
+    lists = parse_rtm_lists_response(lists_payload)
+    tasks = parse_rtm_tasks_response(tasks_payload)
+    return RtmReadResponse(
+        lists=lists,
+        tasks=tasks,
+        list_count=len(lists),
+        active_task_count=len(tasks),
+    )
+
+
+def call_rtm_method(
+    method: str,
+    settings: Settings,
+    token: RtmToken,
+    extra_params: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    _require_rtm_credentials(settings)
+    params = {
+        "api_key": settings.rtm_api_key,
+        "auth_token": token.token,
+        "format": "json",
+        "method": method,
+    }
+    if extra_params:
+        params.update(extra_params)
+    params["api_sig"] = sign_rtm_params(params, settings.rtm_shared_secret)
+    return _get_rtm_json(settings, params)
+
+
 def parse_rtm_token_response(payload: dict[str, Any]) -> RtmToken:
     rsp = payload.get("rsp")
     if not isinstance(rsp, dict):
@@ -104,11 +177,91 @@ def parse_rtm_token_response(payload: dict[str, Any]) -> RtmToken:
         raise _bad_rtm_response() from exc
 
 
+def parse_rtm_lists_response(payload: dict[str, Any]) -> list[RtmList]:
+    rsp = _require_ok_rsp(payload)
+    lists_payload = _as_list(_require_dict(rsp.get("lists"), "lists").get("list"))
+    lists: list[RtmList] = []
+
+    for item in lists_payload:
+        list_payload = _require_dict(item, "list")
+        lists.append(
+            RtmList(
+                id=str(list_payload["id"]),
+                name=str(list_payload["name"]),
+                deleted=_rtm_bool(list_payload.get("deleted")),
+                locked=_rtm_bool(list_payload.get("locked")),
+                archived=_rtm_bool(list_payload.get("archived")),
+                position=_optional_int(list_payload.get("position")),
+                smart=_rtm_bool(list_payload.get("smart")),
+                filter=_optional_text(list_payload.get("filter")),
+            )
+        )
+
+    return lists
+
+
+def parse_rtm_tasks_response(payload: dict[str, Any]) -> list[RtmTask]:
+    rsp = _require_ok_rsp(payload)
+    list_payloads = _as_list(_require_dict(rsp.get("tasks"), "tasks").get("list"))
+    tasks: list[RtmTask] = []
+
+    for item in list_payloads:
+        list_payload = _require_dict(item, "list")
+        list_id = str(list_payload["id"])
+        taskseries_payloads = _as_list(list_payload.get("taskseries"))
+
+        for taskseries_item in taskseries_payloads:
+            taskseries = _require_dict(taskseries_item, "taskseries")
+            task_payloads = _as_list(taskseries.get("task"))
+            tags = _parse_tags(taskseries.get("tags"))
+            notes = _parse_notes(taskseries.get("notes"))
+
+            for task_item in task_payloads:
+                task = _require_dict(task_item, "task")
+                if task.get("completed") or task.get("deleted"):
+                    continue
+                tasks.append(
+                    RtmTask(
+                        list_id=list_id,
+                        taskseries_id=str(taskseries["id"]),
+                        task_id=str(task["id"]),
+                        name=str(taskseries["name"]),
+                        created=str(taskseries.get("created", "")),
+                        modified=str(taskseries.get("modified", "")),
+                        source=str(taskseries.get("source", "")),
+                        url=str(taskseries.get("url", "")),
+                        location_id=str(taskseries.get("location_id", "")),
+                        tags=tags,
+                        notes=notes,
+                        due=str(task.get("due", "")),
+                        has_due_time=_rtm_bool(task.get("has_due_time")),
+                        added=str(task.get("added", "")),
+                        completed=str(task.get("completed", "")),
+                        deleted=str(task.get("deleted", "")),
+                        priority=str(task.get("priority", "")),
+                        postponed=_optional_int(task.get("postponed")) or 0,
+                        estimate=str(task.get("estimate", "")),
+                    )
+                )
+
+    return tasks
+
+
 def load_rtm_status(settings: Settings) -> RtmStatus:
     token = load_rtm_token(settings)
     if token is None:
         return RtmStatus(connected=False)
     return RtmStatus(connected=True, user=token.user, perms=token.perms)
+
+
+def require_rtm_token(settings: Settings) -> RtmToken:
+    token = load_rtm_token(settings)
+    if token is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="RTM is not connected",
+        )
+    return token
 
 
 def load_rtm_token(settings: Settings) -> RtmToken | None:
@@ -132,6 +285,27 @@ def save_rtm_token(token: RtmToken, settings: Settings) -> None:
     path.chmod(0o600)
 
 
+def _get_rtm_json(settings: Settings, params: dict[str, str]) -> dict[str, Any]:
+    try:
+        response = httpx.get(settings.rtm_rest_url, params=params, timeout=settings.rtm_request_timeout_seconds)
+        response.raise_for_status()
+        payload = response.json()
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="RTM API request failed",
+        ) from exc
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="RTM returned an invalid response",
+        ) from exc
+
+    if not isinstance(payload, dict):
+        raise _bad_rtm_response()
+    return payload
+
+
 def _require_rtm_credentials(settings: Settings) -> None:
     if not settings.rtm_api_key or not settings.rtm_shared_secret:
         raise HTTPException(
@@ -145,3 +319,67 @@ def _bad_rtm_response() -> HTTPException:
         status_code=status.HTTP_502_BAD_GATEWAY,
         detail="RTM returned an unexpected response",
     )
+
+
+def _require_ok_rsp(payload: dict[str, Any]) -> dict[str, Any]:
+    rsp = payload.get("rsp")
+    if not isinstance(rsp, dict):
+        raise _bad_rtm_response()
+
+    if rsp.get("stat") == "fail":
+        err = rsp.get("err") if isinstance(rsp.get("err"), dict) else {}
+        message = err.get("msg") or "RTM API request failed"
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=message)
+
+    if rsp.get("stat") != "ok":
+        raise _bad_rtm_response()
+    return rsp
+
+
+def _require_dict(value: Any, field_name: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"RTM response missing {field_name}",
+        )
+    return value
+
+
+def _as_list(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
+def _rtm_bool(value: Any) -> bool:
+    return str(value) == "1"
+
+
+def _optional_int(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    return int(value)
+
+
+def _optional_text(value: Any) -> str | None:
+    if value in (None, ""):
+        return None
+    return str(value)
+
+
+def _parse_tags(tags_payload: Any) -> list[str]:
+    tags = _require_dict(tags_payload or {}, "tags").get("tag")
+    return [str(tag) for tag in _as_list(tags)]
+
+
+def _parse_notes(notes_payload: Any) -> list[str]:
+    notes = _require_dict(notes_payload or {}, "notes").get("note")
+    parsed_notes: list[str] = []
+    for item in _as_list(notes):
+        if isinstance(item, dict):
+            parsed_notes.append(str(item.get("$t", "")))
+        else:
+            parsed_notes.append(str(item))
+    return parsed_notes

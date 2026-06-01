@@ -50,6 +50,6 @@ VITE_API_BASE_URL=http://localhost:8000
 
 The app defaults to `http://localhost:8000` when `VITE_API_BASE_URL` is not provided.
 
-The dashboard reads RTM connection status from the backend and can start RTM authorization through the backend. It does not store RTM credentials or tokens.
+The dashboard reads RTM connection status from the backend, can start RTM authorization through the backend, and can trigger read-only list/task sync. It does not store RTM credentials or tokens.
 
 Never put RTM shared secrets, Gemma keys, long-lived RTM tokens, database URLs, or session-signing secrets in this workspace. Those values belong in backend-only configuration or a hosting-provider secret manager.

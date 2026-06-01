@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from app.auth import AuthenticatedUser, create_session_token, get_current_user, verify_credentials
-from app.rtm import RtmStatus, build_rtm_auth_url, load_rtm_status, redeem_rtm_frob, save_rtm_token
+from app.rtm import RtmReadResponse, RtmStatus, build_rtm_auth_url, fetch_rtm_read_data, load_rtm_status, redeem_rtm_frob, save_rtm_token
 from app.settings import Settings, get_settings
 
 
@@ -99,6 +99,14 @@ def rtm_status(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> RtmStatus:
     return load_rtm_status(settings)
+
+
+@app.get("/api/rtm/sync", response_model=RtmReadResponse)
+def rtm_sync(
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> RtmReadResponse:
+    return fetch_rtm_read_data(settings)
 
 
 @app.post("/api/rtm/connect", response_model=RtmConnectResponse)
