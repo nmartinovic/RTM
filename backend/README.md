@@ -66,6 +66,6 @@ Use managed Postgres for durable production storage when persistence is added. U
 - `GET /api/rtm/status`: returns the server-side RTM connection state. Requires authentication.
 - `POST /api/rtm/connect`: returns a signed RTM authorization URL. Requires authentication.
 - `GET /api/rtm/callback`: exchanges RTM's `frob` for an auth token and stores it on the backend. Requires authentication.
-- `GET /api/rtm/sync`: fetches RTM lists and incomplete tasks with read-only API methods. Requires authentication and an RTM connection.
+- `GET /api/rtm/sync`: fetches RTM lists and incomplete tasks with read-only API methods and returns PRD-style task snapshots with `state_hash`. Requires authentication and an RTM connection.
 
 The read-only RTM sync calls `rtm.lists.getList` and `rtm.tasks.getList` with `filter=status:incomplete`. It does not call RTM write methods.

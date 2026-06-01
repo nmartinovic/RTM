@@ -53,6 +53,7 @@ class RtmTask(BaseModel):
     tags: list[str]
     notes: list[str]
     due: str
+    start: str
     has_due_time: bool
     added: str
     completed: str
@@ -60,11 +61,32 @@ class RtmTask(BaseModel):
     priority: str
     postponed: int
     estimate: str
+    recurrence: str | None
+
+
+class TaskSnapshot(BaseModel):
+    list_id: str
+    list_name: str | None
+    taskseries_id: str
+    task_id: str
+    name: str
+    notes: list[str]
+    tags: list[str]
+    due: str | None
+    start: str | None
+    priority: str
+    estimate: str | None
+    url: str | None
+    recurrence: str | None
+    completed: str | None
+    deleted: str | None
+    state_hash: str
 
 
 class RtmReadResponse(BaseModel):
     lists: list[RtmList]
     tasks: list[RtmTask]
+    snapshots: list[TaskSnapshot]
     list_count: int
     active_task_count: int
 
@@ -118,9 +140,11 @@ def fetch_rtm_read_data(settings: Settings) -> RtmReadResponse:
     tasks_payload = call_rtm_method("rtm.tasks.getList", settings, token, {"filter": "status:incomplete"})
     lists = parse_rtm_lists_response(lists_payload)
     tasks = parse_rtm_tasks_response(tasks_payload)
+    snapshots = build_task_snapshots(lists, tasks)
     return RtmReadResponse(
         lists=lists,
         tasks=tasks,
+        snapshots=snapshots,
         list_count=len(lists),
         active_task_count=len(tasks),
     )
@@ -234,6 +258,7 @@ def parse_rtm_tasks_response(payload: dict[str, Any]) -> list[RtmTask]:
                         tags=tags,
                         notes=notes,
                         due=str(task.get("due", "")),
+                        start=str(task.get("start", "")),
                         has_due_time=_rtm_bool(task.get("has_due_time")),
                         added=str(task.get("added", "")),
                         completed=str(task.get("completed", "")),
@@ -241,10 +266,45 @@ def parse_rtm_tasks_response(payload: dict[str, Any]) -> list[RtmTask]:
                         priority=str(task.get("priority", "")),
                         postponed=_optional_int(task.get("postponed")) or 0,
                         estimate=str(task.get("estimate", "")),
+                        recurrence=_parse_recurrence(taskseries.get("rrule")),
                     )
                 )
 
     return tasks
+
+
+def build_task_snapshots(lists: list[RtmList], tasks: list[RtmTask]) -> list[TaskSnapshot]:
+    list_names = {rtm_list.id: rtm_list.name for rtm_list in lists}
+    return [build_task_snapshot(task, list_names.get(task.list_id)) for task in tasks]
+
+
+def build_task_snapshot(task: RtmTask, list_name: str | None) -> TaskSnapshot:
+    snapshot_fields = {
+        "list_id": task.list_id,
+        "list_name": list_name,
+        "taskseries_id": task.taskseries_id,
+        "task_id": task.task_id,
+        "name": task.name,
+        "notes": task.notes,
+        "tags": sorted(task.tags),
+        "due": _optional_text(task.due),
+        "start": _optional_text(task.start),
+        "priority": task.priority,
+        "estimate": _optional_text(task.estimate),
+        "url": _optional_text(task.url),
+        "recurrence": task.recurrence,
+        "completed": _optional_text(task.completed),
+        "deleted": _optional_text(task.deleted),
+    }
+    return TaskSnapshot(
+        **snapshot_fields,
+        state_hash=compute_state_hash(snapshot_fields),
+    )
+
+
+def compute_state_hash(snapshot_fields: dict[str, Any]) -> str:
+    encoded = json.dumps(snapshot_fields, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode()).hexdigest()
 
 
 def load_rtm_status(settings: Settings) -> RtmStatus:
@@ -383,3 +443,11 @@ def _parse_notes(notes_payload: Any) -> list[str]:
         else:
             parsed_notes.append(str(item))
     return parsed_notes
+
+
+def _parse_recurrence(rrule_payload: Any) -> str | None:
+    if rrule_payload in (None, ""):
+        return None
+    if isinstance(rrule_payload, dict):
+        return _optional_text(rrule_payload.get("$t"))
+    return str(rrule_payload)
