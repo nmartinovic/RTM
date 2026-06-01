@@ -9,12 +9,14 @@ const assetDir = join(dist, 'assets');
 await rm(dist, { recursive: true, force: true });
 await mkdir(assetDir, { recursive: true });
 
-const apiBaseUrl = process.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+const defaultApiBaseUrl = 'http://localhost:8000';
+const configuredApiBaseUrl = process.env.VITE_API_BASE_URL?.trim();
+const apiBaseUrl = configuredApiBaseUrl || defaultApiBaseUrl;
 let appJs = await readFile(join(root, 'build/assets/main.js'), 'utf8');
 appJs = appJs.replace("import { apiBaseUrl } from './config';", '');
 let configJs = await readFile(join(root, 'build/assets/config.js'), 'utf8');
 configJs = configJs.replace(
-  "import.meta.env?.VITE_API_BASE_URL ?? 'http://localhost:8000'",
+  "import.meta.env?.VITE_API_BASE_URL?.trim()",
   JSON.stringify(apiBaseUrl),
 );
 await writeFile(join(assetDir, 'app.js'), `${configJs}\n${appJs}`);
