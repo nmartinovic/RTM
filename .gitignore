@@ -1,0 +1,70 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.env
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+credentials/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+.venv/
+venv/
+env/
+ENV/
+build/
+dist/
+*.egg-info/
+.pyre/
+.ipynb_checkpoints/
+
+# Node / frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.vite/
+.next/
+.nuxt/
+.svelte-kit/
+coverage/
+frontend/dist/
+frontend/build/
+
+# Build outputs and caches
+.cache/
+.tmp/
+tmp/
+out/
+.DS_Store
+Thumbs.db
+
+# Local databases and storage
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+local-data/
+uploads/
+
+# IDE/editor
+.idea/
+.vscode/
+*.swp
+*.swo
